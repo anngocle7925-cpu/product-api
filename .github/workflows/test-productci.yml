@@ -1,0 +1,35 @@
+name: Product API CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+    # 1. Tải mã nguồn từ repository xuống máy chủ ảo của GitHub Actions
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Cài đặt môi trường Node.js phiên bản chỉ định
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    # 3. Cài đặt các thư viện phụ thuộc từ package.json
+    - name: Install dependencies
+      run: npm install
+
+    # 4. Kiểm tra nhanh mã nguồn server.js khởi chạy thành công không lỗi cú pháp
+    - name: Verify application syntax
+      run: node -c server.js

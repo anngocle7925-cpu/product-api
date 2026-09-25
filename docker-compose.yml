@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # Service 1: Container CSDL MongoDB có tích hợp Healthcheck
+  nammongodb:
+    image: mongo:latest
+    container_name: nammongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Service 2: Container ứng dụng RESTful API chờ MongoDB healthy mới chạy
+  product-api:
+    build: .
+    container_name: product-api-container
+    ports:
+      - "3000:3000"
+    environment:
+      - MONGO_URI=mongodb://nammongodb:27017/productdb
+    depends_on:
+      nammongodb:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3000/api/products" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  mongo-data:
