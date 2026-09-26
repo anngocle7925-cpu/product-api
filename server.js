@@ -5,8 +5,7 @@ const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI;
-
+const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
 // Middleware
 app.use(express.json());
 app.use(cors());
@@ -87,7 +86,13 @@ app.delete('/api/products/:pid', async (req, res) => {
     }
 });
 
+// API Healthcheck dành cho Docker
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK - Healthy' });
+});
+
 // Khởi chạy Server
+
 app.listen(PORT, () => {
     console.log(`🚀 Server RESTful API đang chạy tại http://localhost:${PORT}`);
 });
