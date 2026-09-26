@@ -1,4 +1,8 @@
+// Fix triệt để lỗi "crypto is not defined" từ Mongoose / BSON ở phạm vi toàn cục
 const crypto = require('crypto');
+if (!globalThis.crypto) {
+    globalThis.crypto = crypto;
+}
 
 require('dotenv').config();
 const express = require('express');
@@ -8,13 +12,14 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
+
 // Middleware
 app.use(express.json());
 app.use(cors());
 
-// Kết nối cơ sở dữ liệu MongoDB (container nammongodb) qua biến môi trường .env
+// Kết nối cơ sở dữ liệu MongoDB qua biến môi trường .env
 mongoose.connect(MONGO_URI)
-    .then(() => console.log('✅ Kết nối thành công đến MongoDB (nammongodb) qua .env!'))
+    .then(() => console.log('✅ Kết nối thành công đến MongoDB!'))
     .catch(err => console.error('❌ Lỗi kết nối MongoDB:', err));
 
 // Định nghĩa Schema & Model cho Product (pid, pname, price, quantity)
@@ -94,7 +99,6 @@ app.get('/health', (req, res) => {
 });
 
 // Khởi chạy Server
-
 app.listen(PORT, () => {
     console.log(`🚀 Server RESTful API đang chạy tại http://localhost:${PORT}`);
 });
