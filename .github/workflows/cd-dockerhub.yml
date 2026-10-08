@@ -1,0 +1,52 @@
+name: CD to Docker Hub
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/product-api
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t $IMAGE:ci .
+
+      - name: Start stack and wait for healthcheck
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 30); do
+            api=$(docker inspect --format '{{.State.Health.Status}}' product-api 2>/dev/null || echo starting)
+            mongo=$(docker inspect --format '{{.State.Health.Status}}' nammongodb 2>/dev/null || echo starting)
+            echo "api=$api mongo=$mongo"
+            if [ "$api" = "healthy" ] && [ "$mongo" = "healthy" ]; then exit 0; fi
+            sleep 5
+          done
+          docker compose logs
+          exit 1
+
+      - name: Run CRUD test script
+        run: bash scripts/test-api.sh
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push image (only after healthcheck and tests passed)
+        run: |
+          docker tag $IMAGE:ci $IMAGE:latest
+          docker tag $IMAGE:ci $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
+          docker push $IMAGE:${{ github.sha }}
