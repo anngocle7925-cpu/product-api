@@ -1,0 +1,97 @@
+name: Test Product CI (production-like)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  ci-with-mongodb:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PORT: 3000
+      MONGO_URI: mongodb://localhost:27017/productdb_ci
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start API in background
+        run: |
+          nohup npm start > api.log 2>&1 &
+          echo "API starting..."
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health > /dev/null; then
+              echo "API is healthy"
+              exit 0
+            fi
+            echo "Waiting for API ($i/30)..."
+            sleep 2
+          done
+          echo "API did not become healthy"
+          cat api.log
+          exit 1
+
+      - name: Run CRUD test script
+        run: bash scripts/test-api.sh
+
+      - name: Show API log on failure
+        if: failure()
+        run: cat api.log
+
+  docker-compose-check:
+    runs-on: ubuntu-latest
+    needs: ci-with-mongodb
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start stack with Docker Compose
+        run: docker compose up -d --build
+
+      - name: Wait until containers are healthy
+        run: |
+          for i in $(seq 1 30); do
+            api=$(docker inspect --format '{{.State.Health.Status}}' product-api 2>/dev/null || echo starting)
+            mongo=$(docker inspect --format '{{.State.Health.Status}}' nammongodb 2>/dev/null || echo starting)
+            echo "api=$api mongo=$mongo"
+            if [ "$api" = "healthy" ] && [ "$mongo" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose logs
+          exit 1
+
+      - name: Run CRUD test against containers
+        run: bash scripts/test-api.sh
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
