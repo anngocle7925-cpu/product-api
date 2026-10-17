@@ -16,7 +16,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Pull latest image from Docker Hub
-        run: docker compose -f docker-compose-prod.yaml pull
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            docker compose -f docker-compose-prod.yaml pull && exit 0
+            echo "Pull failed (attempt $i), retrying in 10s..."
+            sleep 10
+          done
+          echo "WARNING: pull failed, using images already on this machine"
+          exit 0
 
       - name: Deploy
         run: docker compose -f docker-compose-prod.yaml up -d
