@@ -1,0 +1,38 @@
+name: Deploy to Local Docker Engine
+
+on:
+  workflow_run:
+    workflows: ["CD to Docker Hub"]
+    types: [completed]
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [self-hosted, local-docker]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Pull latest image from Docker Hub
+        run: docker compose -f docker-compose-prod.yaml pull
+
+      - name: Deploy
+        run: docker compose -f docker-compose-prod.yaml up -d
+
+      - name: Wait for healthy
+        shell: bash
+        run: |
+          for i in $(seq 1 30); do
+            api=$(docker inspect --format '{{.State.Health.Status}}' product-api-prod 2>/dev/null || echo starting)
+            echo "api=$api"
+            if [ "$api" = "healthy" ]; then exit 0; fi
+            sleep 5
+          done
+          docker compose -f docker-compose-prod.yaml logs
+          exit 1
+
+      - name: Smoke test
+        shell: bash
+        run: BASE_URL=http://localhost:3001 bash scripts/test-api.sh
