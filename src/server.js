@@ -10,7 +10,7 @@ app.use(express.json());
 app.get('/health', (req, res) => {
     const dbOk = mongoose.connection.readyState === 1;
     res.status(dbOk ? 200 : 503).json({
-        status: dbOk ? 'true' : 'DB_DOWN',
+        status: dbOk ? 'True' : 'DB_DOWN',
         db: dbOk ? 'connected' : 'disconnected',
         uptime: process.uptime(),
     });
